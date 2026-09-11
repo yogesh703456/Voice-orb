@@ -1,0 +1,34 @@
+# config/settings.yaml
+# Central place for the knobs we discussed — nothing here should end up
+# hardcoded in the pipeline modules.
+
+wake_word:
+  phrase: "hey jarvis"       # maps to OpenWakeWord hey_jarvis_v0.1
+  sensitivity: 0.1
+
+stt:
+  model_size: "small.en"     # base.en / small.en — bigger = more accurate, slower
+  compute_type: "int8"       # int8 keeps CPU load low on modest hardware
+  silence_timeout_sec: 1.2   # how long to wait for silence before ending capture
+
+tts:
+  rate: 175                  # words per minute
+  voice: "default"           # SAPI5 voice name, "default" = system default
+
+orb:
+  position: "bottom-right"   # bottom-right / bottom-left / top-right / top-left
+  size_px: 56
+  draggable: true
+  remember_position: true    # persist dragged position across restarts
+
+file_index:
+  roots:                     # folders to index; keep this scoped, not the whole C:\
+    - "~/Documents"
+    - "~/Desktop"
+    - "~/Downloads"
+  refresh_on_startup: true
+  watch_for_changes: true
+
+startup:
+  autostart: true
+  run_hidden: true

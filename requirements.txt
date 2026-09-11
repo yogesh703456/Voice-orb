@@ -1,0 +1,33 @@
+# Core pipeline
+openwakeword       # local wake word detection
+psutil             # CPU monitoring, and now battery-level queries
+faster-whisper     # local STT used by core/speech_recognition.py
+pyttsx3            # offline TTS (SAPI5 on Windows)
+sounddevice        # mic capture
+numpy
+
+# File search / indexing
+watchdog           # filesystem watcher to keep the index fresh
+rapidfuzz          # fuzzy matching for "open resume" -> actual filename
+
+# File management safety
+send2trash         # "delete X" moves to the Recycle Bin instead of deleting permanently
+
+# UI (orb widget)
+PySide6            # frameless/transparent always-on-top orb window
+
+# Background / autostart
+pystray            # tray icon
+pillow             # tray icon image handling; also used for "take a screenshot"
+
+# Volume control (optional -- "volume up/down/mute" works without these via
+# simulated media keys; only "set volume to X percent" needs an exact level)
+pycaw              # Windows audio endpoint volume control
+comtypes           # required by pycaw
+
+# Working inside apps -- typing/dictation, key shortcuts, window control
+pyautogui          # "type X", "press enter", "select all", "minimize this"
+pygetwindow        # "switch to chrome" (find + focus an existing window)
+
+# Config
+pyyaml
