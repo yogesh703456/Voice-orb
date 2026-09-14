@@ -7,29 +7,57 @@ from pathlib import Path
 from core.capture import record_command
 from core.speech_recognition import SpeechRecognizer
 from core.intent import parse_commands
-from core.executor import execute_all
+from core.executor import execute_all, warm_up
 from core.tts import Speaker
 from core.wake_word import WakeWordListener
 from core import apps
 from orb.state import OrbState, state_bus
+from indexer.file_index import FileIndex
+from core.executor import configure_file_index
+from indexer.watcher import IndexWatcher
 
 
 def load_settings() -> dict:
     path = Path(__file__).resolve().parent / "config" / "settings.yaml"
+
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Settings file was not found: {path}"
+        )
+
     try:
         import yaml
+    except ImportError as exc:
+        raise RuntimeError(
+            "PyYAML is not installed. Run: pip install pyyaml"
+        ) from exc
 
+    try:
         with path.open(encoding="utf-8") as handle:
-            return yaml.safe_load(handle) or {}
-    except Exception:
-        return {}
+            settings = yaml.safe_load(handle) or {}
+    except yaml.YAMLError as exc:
+        raise RuntimeError(
+            f"settings.yaml has invalid YAML: {exc}"
+        ) from exc
 
+    if not isinstance(settings, dict):
+        raise ValueError(
+            "settings.yaml must contain a YAML mapping, not a list or plain text."
+        )
 
-def print_header(wake_phrase: str) -> None:
+    return settings
+
+def print_startup_banner() -> None:
     print()
     print("=" * 60)
     print("                 JARVIS - VOICE ORB")
     print("=" * 60)
+    print()
+    print("[JARVIS] Starting up...")
+    print()
+
+
+def print_ready(wake_phrase: str) -> None:
     print()
     print("[JARVIS] System ready.")
     print(f"Say '{wake_phrase}' to wake me.")
@@ -75,6 +103,30 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
     wake_cfg = settings.get("wake_word") or {}
     stt_cfg = settings.get("stt") or {}
     tts_cfg = settings.get("tts") or {}
+    file_index_cfg = settings.get("file_index") or {}
+
+    index_roots = file_index_cfg.get("roots") or [
+    "~/Desktop",
+    "~/Documents",
+    "~/Downloads",
+    ]
+
+    index_path = (
+        Path(__file__).resolve().parent
+        / "file_index.sqlite3"
+    )
+
+    file_index = FileIndex(
+        db_path=str(index_path),
+        roots=index_roots,
+    )
+
+    configure_file_index(file_index)
+
+    if file_index_cfg.get("refresh_on_startup", True):
+        print("[INDEX] Building file index...")
+        file_index.build()
+    index_watcher = None    
 
     wake_phrase = str(wake_cfg.get("phrase") or "hey jarvis")
     sensitivity = float(wake_cfg.get("sensitivity") or 0.3)
@@ -82,7 +134,16 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
     model_size = str(stt_cfg.get("model_size") or "small.en")
     compute_type = str(stt_cfg.get("compute_type") or "int8")
 
-    print_header(wake_phrase)
+    # ------------------------------------------------------------
+    # STARTUP: everything that costs real time -- the Whisper model, the
+    # Start Menu app scan, the TTS engine probe, the wake-word model, and
+    # every optional dependency the executor otherwise only imports on
+    # first use -- loads here, once, up front. Nothing below this block
+    # runs lazily on the first real command; by the time "WAITING FOR
+    # ..." prints, the whole pipeline is actually sitting ready in RAM,
+    # not still loading pieces of itself in the background.
+    # ------------------------------------------------------------
+    print_startup_banner()
 
     try:
         recognizer = SpeechRecognizer(model_name=model_size, compute_type=compute_type)
@@ -91,9 +152,6 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
         state_bus.set_state(OrbState.ERROR)
         return
 
-    # Kick off the Start Menu scan now, in the background, so it's ready
-    # by the time you say your first "open <app>" instead of that first
-    # command paying for the PowerShell round-trip (see core/apps.py).
     apps.preload()
 
     speaker = Speaker(rate=int(tts_cfg.get("rate") or 175), voice=str(tts_cfg.get("voice") or "default"))
@@ -113,6 +171,16 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
         print("[JARVIS] Falling back to listening for the wake phrase in speech.")
         wake_listener = None
 
+    warm_up()
+    if file_index_cfg.get("watch_for_changes", True):
+        index_watcher = IndexWatcher(file_index, index_roots)
+        index_watcher.start()
+
+    # Only now -- once Whisper, the app list, TTS, the wake-word model,
+    # and the optional executor dependencies have all actually finished
+    # loading -- is the assistant genuinely ready, so this is where that
+    # gets said, not before.
+    print_ready(wake_phrase)
     state_bus.set_state(OrbState.IDLE)
 
     while not stop_event.is_set():
@@ -248,6 +316,8 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
         wake_listener.stop()
 
     state_bus.set_state(OrbState.IDLE)
+    if index_watcher is not None:
+        index_watcher.stop()
     on_shutdown()
 
 

@@ -4,12 +4,12 @@
 
 wake_word:
   phrase: "hey jarvis"       # maps to OpenWakeWord hey_jarvis_v0.1
-  sensitivity: 0.1
+  sensitivity: 0.15
 
 stt:
   model_size: "small.en"     # base.en / small.en — bigger = more accurate, slower
   compute_type: "int8"       # int8 keeps CPU load low on modest hardware
-  silence_timeout_sec: 1.2   # how long to wait for silence before ending capture
+  silence_timeout_sec: 1.5   # how long to wait for silence before ending capture
 
 tts:
   rate: 175                  # words per minute
@@ -17,7 +17,7 @@ tts:
 
 orb:
   position: "bottom-right"   # bottom-right / bottom-left / top-right / top-left
-  size_px: 56
+  size_px: 80
   draggable: true
   remember_position: true    # persist dragged position across restarts
 

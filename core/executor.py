@@ -14,6 +14,15 @@ import webbrowser
 from typing import Callable, Optional
 from core.intent import ParsedIntent, IntentType
 from core import apps
+<<<<<<< HEAD
+=======
+from indexer.file_index import FileIndex
+
+try:
+    from rapidfuzz import fuzz, process as fuzzy_process
+except ImportError:
+    fuzzy_process = None
+>>>>>>> 45763e9 (Initial commit)
 
 try:
     from send2trash import send2trash
@@ -166,17 +175,60 @@ _SKIP_DIR_NAMES = {
 }
 
 
+<<<<<<< HEAD
 def _search_user_files(query: str, limit: int = 5, max_files: int = 2500) -> list[Path]:
+=======
+def _fuzzy_pick(needle: str, candidates: list[tuple[Path, str]], limit: int) -> list[Path]:
+    """Rescue pass for when no exact substring matched anything: fuzzy-
+    match the needle against every candidate name collected during the
+    walk. This is what lets a mis-transcribed multi-word name ("raw
+    paper scissor mini project" said for a folder actually named "Rock
+    Paper Scissor Mini Project") still resolve, instead of silently
+    failing just because the STT output wasn't a literal substring of
+    the real name."""
+    if fuzzy_process is None or not candidates:
+        return []
+    # Lowercase both sides explicitly -- rapidfuzz's raw scorers are
+    # case-sensitive, and `needle` is already lowercased by the caller,
+    # so leaving real filenames in their original case would silently
+    # tank every score (e.g. 74 vs. 62 for the same pair, enough to fall
+    # below the cutoff) for no reason related to the actual match quality.
+    names_lower = [name.lower() for _, name in candidates]
+    results = fuzzy_process.extract(
+    needle,
+    names_lower,
+    scorer=fuzz.WRatio,
+    score_cutoff=90,
+    limit=limit,
+    )
+    return [candidates[index][0] for _name, _score, index in results]
+
+
+def _find_matches(query: str, *, mode: str, limit: int, max_items: int) -> list[Path]:
+    """Shared walk-and-match implementation for _search_user_files and
+    _search_user_folders (mode="files" or "dirs"): exact substring
+    matches first (fast, precise), then a fuzzy fallback over everything
+    seen if that finds nothing at all."""
+>>>>>>> 45763e9 (Initial commit)
     needle = query.strip().lower()
     # Below ~4 characters a raw substring match starts hitting unrelated
     # files purely by coincidence -- "you" is a substring of "layout.tsx",
     # "it" of "editor.py", etc. A garbled/short transcript should fail
+<<<<<<< HEAD
     # cleanly rather than confidently open the wrong file.
+=======
+    # cleanly rather than confidently open the wrong thing.
+>>>>>>> 45763e9 (Initial commit)
     if not needle or len(needle) < 4:
         return []
 
     roots = [Path.home() / folder for folder in ("Desktop", "Documents", "Downloads")]
+<<<<<<< HEAD
     matches: list[Path] = []
+=======
+    substring_matches: list[Path] = []
+    candidates: list[tuple[Path, str]] = []
+>>>>>>> 45763e9 (Initial commit)
     scanned = 0
 
     for root in roots:
@@ -185,6 +237,7 @@ def _search_user_files(query: str, limit: int = 5, max_files: int = 2500) -> lis
         try:
             for dirpath, dirnames, filenames in os.walk(root):
                 dirnames[:] = [name for name in dirnames if name not in _SKIP_DIR_NAMES]
+<<<<<<< HEAD
                 for name in filenames:
                     scanned += 1
                     if scanned > max_files:
@@ -226,6 +279,60 @@ def _search_user_folders(query: str, limit: int = 5, max_dirs: int = 2500) -> li
         except OSError:
             continue
     return matches
+=======
+                names = list(dirnames) if mode == "dirs" else filenames
+                for name in names:
+                    scanned += 1
+                    
+                    path = Path(dirpath) / name
+                    candidates.append((path, name))
+                    if needle in name.lower():
+                        substring_matches.append(path)
+                        if len(substring_matches) >= limit:
+                            return substring_matches
+        except OSError:
+            continue
+
+    if substring_matches:
+        return substring_matches
+    return _fuzzy_pick(needle, candidates, limit)
+
+
+def _search_user_files(
+    query: str,
+    limit: int = 5,
+    max_files: int = 2500,
+) -> list[Path]:
+    if _file_index is None:
+        return []
+
+    return [
+        Path(path)
+        for _, path in _file_index.search(
+            query,
+            limit=limit,
+            folders_only=False,
+        )
+    ]
+
+
+def _search_user_folders(
+    query: str,
+    limit: int = 5,
+    max_dirs: int = 2500,
+) -> list[Path]:
+    if _file_index is None:
+        return []
+
+    return [
+        Path(path)
+        for _, path in _file_index.search(
+            query,
+            limit=limit,
+            folders_only=True,
+        )
+    ]
+>>>>>>> 45763e9 (Initial commit)
 
 
 _LOCATIONS = {
@@ -269,6 +376,7 @@ def _next_available_name(directory: Path, base: str, suffix: str = "") -> str:
 # just talked about, with no name repeated) has something concrete to
 # resolve to instead of failing outright.
 _LAST_CREATED_PATH: Optional[Path] = None
+<<<<<<< HEAD
 
 
 def _delete_path(path: Path, is_dir: bool) -> ExecutionResult:
@@ -291,6 +399,42 @@ def _delete_path(path: Path, is_dir: bool) -> ExecutionResult:
         return result
     except OSError as exc:
         return ExecutionResult(False, f"I couldn't delete {path.name}: {exc}")
+=======
+_file_index: FileIndex | None = None
+
+
+def configure_file_index(index: FileIndex) -> None:
+    global _file_index
+    _file_index = index
+
+
+def _delete_path(path: Path, is_dir: bool) -> ExecutionResult:
+    """Move a confirmed item to the Recycle Bin; never delete permanently."""
+    global _LAST_CREATED_PATH
+
+    if send2trash is None:
+        return ExecutionResult(
+            False,
+            "Deletion is disabled because Recycle Bin support is unavailable."
+        )
+
+    try:
+        send2trash(str(path))
+
+        if _LAST_CREATED_PATH == path:
+            _LAST_CREATED_PATH = None
+
+        return ExecutionResult(
+            True,
+            f"Moved {path.name} to the Recycle Bin."
+        )
+
+    except OSError as exc:
+        return ExecutionResult(
+            False,
+            f"I couldn't move {path.name} to the Recycle Bin: {exc}"
+        )
+>>>>>>> 45763e9 (Initial commit)
 
 
 def _type_text(text: str) -> ExecutionResult:
@@ -389,6 +533,60 @@ def _control_window(action: str, target: str = "") -> ExecutionResult:
         return ExecutionResult(False, f"I couldn't do that: {exc}")
 
 
+<<<<<<< HEAD
+=======
+def _play_music(query: str) -> ExecutionResult:
+    """"Play music" with no target -- open a local music app if one's
+    installed, else fall back to YouTube Music. "Play <song/artist>" --
+    can't drive Spotify's actual playback without its API, so the honest,
+    useful thing is to open a YouTube search for it, which does play."""
+    query = query.strip()
+    if not query:
+        if apps.is_resolvable_name("spotify"):
+            match = apps.resolve_app("spotify")
+            if match and apps.launch_by_app_id(match["app_id"]):
+                return ExecutionResult(True, "Opening Spotify.")
+        _open_default_browser("https://music.youtube.com")
+        return ExecutionResult(True, "Opening YouTube Music.")
+
+    url, _ = _resolve_site_search("youtube", query)
+    _open_default_browser(url)
+    return ExecutionResult(True, f"Playing {query} on YouTube.")
+
+
+def _system_shutdown(command: str) -> ExecutionResult:
+    """Shut down the whole PC -- unlike closing an app, this is
+    irreversible for whatever else was open, so it always requires a
+    spoken "yes" first (same pattern as file deletion), never runs
+    unattended in a multi-command batch, and gives a real cancel window
+    (Windows delays the actual shutdown, and "cancel shutdown" runs
+    `shutdown /a` to abort it during that window)."""
+    if command == "cancel":
+        try:
+            subprocess.run(["shutdown", "/a"], check=False)
+            return ExecutionResult(True, "Shutdown cancelled.")
+        except OSError as exc:
+            return ExecutionResult(False, f"I couldn't cancel the shutdown: {exc}")
+
+    def _confirmed_shutdown() -> ExecutionResult:
+        try:
+            subprocess.Popen(["shutdown", "/s", "/t", "15"])
+            return ExecutionResult(
+                True,
+                "Shutting down in 15 seconds. Say \"cancel shutdown\" to stop it.",
+            )
+        except OSError as exc:
+            return ExecutionResult(False, f"I couldn't shut down the PC: {exc}")
+
+    return ExecutionResult(
+        True,
+        "Are you sure you want to shut down the PC? Say yes to confirm.",
+        needs_confirmation=True,
+        pending_action=_confirmed_shutdown,
+    )
+
+
+>>>>>>> 45763e9 (Initial commit)
 def _control_volume(command: str) -> ExecutionResult:
     """Volume up/down/mute/unmute via simulated media keys -- works on any
     Windows machine with no extra dependency. Setting an exact percentage
@@ -450,6 +648,46 @@ def _control_volume(command: str) -> ExecutionResult:
         return ExecutionResult(False, f"I couldn't change the volume: {exc}")
 
 
+<<<<<<< HEAD
+=======
+def ai_fallback(command: str) -> Optional[str]:
+    """Extension point for the "else: send_to_ai(command)" branch --
+    called only when nothing else (fast_dispatch's cheap checks, then the
+    full regex pattern cascade) could make sense of the command. Returns
+    the text JARVIS should speak, or None to fall back to the default "I
+    didn't understand" response.
+
+    Disabled by default: wiring this up needs an actual provider and API
+    key, which isn't something to hardcode here. To enable it, replace
+    this function's body with a call to whichever LLM you want --
+    Anthropic, OpenAI, a local model, anything that takes a string and
+    returns one back. Because this only ever runs on the leftover
+    fraction of commands the fast/cheap paths didn't already handle, the
+    common commands ("open chrome", "volume up", ...) never pay for it.
+    """
+    return None
+
+
+def warm_up() -> None:
+    """Eagerly import every optional dependency this module otherwise
+    only imports lazily inside its handler functions (pyautogui,
+    pygetwindow, PIL's screenshot support, pycaw) -- so the *first* time
+    someone actually asks to type something, switch windows, take a
+    screenshot, or set an exact volume level, that command isn't the one
+    paying a one-off import cost on top of doing the thing. Call once at
+    startup, before the wait loop, alongside the Whisper/TTS/wake-word/
+    app-list preloading in main.py. Each import is best-effort: if an
+    optional package isn't installed, that specific feature still reports
+    it plainly the first time it's actually used, exactly as before --
+    this only removes the *latency*, not the dependency."""
+    for module_name in ("pyautogui", "pygetwindow", "PIL.ImageGrab", "pycaw.pycaw", "comtypes"):
+        try:
+            __import__(module_name)
+        except ImportError:
+            pass
+
+
+>>>>>>> 45763e9 (Initial commit)
 def execute(intent: ParsedIntent) -> ExecutionResult:
 
     # ---------------------------------------------
@@ -685,6 +923,15 @@ def execute(intent: ParsedIntent) -> ExecutionResult:
     if intent.type == IntentType.VOLUME_CONTROL:
         return _control_volume(intent.query)
 
+<<<<<<< HEAD
+=======
+    if intent.type == IntentType.PLAY_MUSIC:
+        return _play_music(intent.query)
+
+    if intent.type == IntentType.SYSTEM_SHUTDOWN:
+        return _system_shutdown(intent.query)
+
+>>>>>>> 45763e9 (Initial commit)
     if intent.type == IntentType.TYPE_TEXT:
         return _type_text(intent.query)
 
@@ -730,6 +977,7 @@ def execute(intent: ParsedIntent) -> ExecutionResult:
 
     if intent.type == IntentType.UNKNOWN:
 
+<<<<<<< HEAD
         if intent.query.strip() in ("shut down", "shutdown"):
             # Heard "shut down" but not "... jarvis" (which main.py's
             # is_shutdown() checks for before we even get here) and no
@@ -740,6 +988,11 @@ def execute(intent: ParsedIntent) -> ExecutionResult:
                 False,
                 "Say \"shutdown jarvis\" to exit, or tell me which app to close.",
             )
+=======
+        ai_response = ai_fallback(intent.query)
+        if ai_response:
+            return ExecutionResult(True, ai_response)
+>>>>>>> 45763e9 (Initial commit)
 
         return ExecutionResult(
             False,
@@ -801,12 +1054,51 @@ def execute(intent: ParsedIntent) -> ExecutionResult:
                 if apps.launch_by_app_id(match["app_id"]):
                     return ExecutionResult(True, f"Opening {match['name']}.")
 
+<<<<<<< HEAD
             # Nothing matched as an app -- it might be a file instead.
             matches = _search_user_files(app, limit=1)
+=======
+            # Nothing matched as an app -- it might be a file or folder
+            # instead. Folders matter just as much as files here: "open
+            # my project folder" is exactly as common a request as "open
+            # my resume", but folder search used to not be attempted at
+            # all in this path (only file search was), so any project
+            # directory could never be opened this way no matter what was
+            # said.
+            matches = _search_user_files(app, limit=7)
+>>>>>>> 45763e9 (Initial commit)
             if matches:
                 os.startfile(str(matches[0]))
                 return ExecutionResult(True, f"Opening {matches[0].name}.")
 
+<<<<<<< HEAD
+=======
+            folder_matches = _search_user_folders(app, limit=5)
+
+            exact_folder = next(
+             (
+                 folder for folder in folder_matches
+                 if app == folder.name.lower()
+                 or app in folder.name.lower()
+             ),
+             None,
+        )
+
+        if exact_folder:
+            os.startfile(str(exact_folder))
+            return ExecutionResult(
+                True,
+                f"Opening the {exact_folder.name} folder."
+            )
+
+        if folder_matches:
+            choices = ", ".join(folder.name for folder in folder_matches)
+            return ExecutionResult(
+                False,
+                f"I found possible folders: {choices}. Please say the full folder name."
+            )
+
+>>>>>>> 45763e9 (Initial commit)
         return ExecutionResult(
             False,
             f"I couldn't find an app or file called {intent.query}."
@@ -909,6 +1201,7 @@ def execute_all(intents: list[ParsedIntent]) -> ExecutionResult:
     responses: list[str] = []
     overall_success = False
     for intent in intents:
+<<<<<<< HEAD
         if intent.type == IntentType.DELETE_ITEM:
             # Deletion needs a spoken yes/no confirmation, which only
             # main.py's single-command path knows how to do -- silently
@@ -918,6 +1211,21 @@ def execute_all(intents: list[ParsedIntent]) -> ExecutionResult:
             responses.append(
                 f'For safety, deletions need to be their own command -- '
                 f'say "delete {intent.query}" by itself'
+=======
+        if intent.type in (IntentType.DELETE_ITEM, IntentType.SYSTEM_SHUTDOWN):
+            # Both need a spoken yes/no confirmation, which only main.py's
+            # single-command path knows how to do -- silently running (or
+            # silently skipping) a delete or a full shutdown buried inside
+            # a multi-command batch would be exactly the kind of
+            # surprising destructive action this project should never
+            # produce. Shutdown especially: it would also cut off
+            # whatever other actions were queued after it in the batch.
+            label = "Deletions" if intent.type == IntentType.DELETE_ITEM else "Shutting down"
+            example = f"delete {intent.query}" if intent.type == IntentType.DELETE_ITEM else "shutdown pc"
+            responses.append(
+                f'For safety, {label.lower()} need to be their own command -- '
+                f'say "{example}" by itself'
+>>>>>>> 45763e9 (Initial commit)
             )
             continue
         result = execute(intent)

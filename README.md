@@ -63,8 +63,14 @@ voice-orb/
 ## Setup (once implementation lands)
 
 ```bash
+<<<<<<< HEAD
 python -m venv .venv
 .venv\Scripts\activate
+=======
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+>>>>>>> 45763e9 (Initial commit)
 pip install -r requirements.txt
 python main.py
 ```
