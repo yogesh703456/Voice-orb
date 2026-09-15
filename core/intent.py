@@ -36,11 +36,8 @@ class IntentType(Enum):
     DATE_QUERY = auto()
     VOLUME_CONTROL = auto()
     BATTERY_QUERY = auto()
-<<<<<<< HEAD
-=======
     PLAY_MUSIC = auto()
     SYSTEM_SHUTDOWN = auto()
->>>>>>> 45763e9 (Initial commit)
     UNKNOWN = auto()
 
 
@@ -111,44 +108,27 @@ _LEADING_POLITE = re.compile(
     r"^(?:(?:can|could|would|will)\s+you\s+(?:please\s+|just\s+)?"
     r"|(?:please|just)\s+)+"
 )
-<<<<<<< HEAD
-=======
 # Only ever applied narrowly (see _strip_trailing_filler below), never to
 # the whole command -- stripping this globally used to silently eat real
 # words out of anything that captures free-form text, e.g. "type call me
 # please" would type "call me" and drop "please" entirely, since it looks
 # identical to filler wrapping from where a blanket strip is applied.
->>>>>>> 45763e9 (Initial commit)
 _TRAILING_FILLER = re.compile(r"\s+(?:please|for me|now|thanks|thank you)$")
 
 
 def strip_filler(command: str) -> str:
-<<<<<<< HEAD
-    """Strip polite/indirect wrapping ("can you ...", "... please", "now
-    open chrome") from a command so the intent patterns below -- which
-    match on a command starting with the actual verb ("open", "search",
-    "make"...) -- still fire. Runs after the wake word has already been
-    removed."""
-=======
     """Strip polite/indirect wrapping ("can you ...", "now open chrome")
     from the *front* of a command so the intent patterns below -- which
     match on a command starting with the actual verb ("open", "search",
     "make"...) -- still fire. Runs after the wake word has already been
     removed. Deliberately leading-only: see _TRAILING_FILLER's note on
     why a trailing strip can't safely be applied here."""
->>>>>>> 45763e9 (Initial commit)
 
     previous = None
     while previous != command:
         previous = command
         command = _LEADING_STANDALONE.sub("", command).strip()
         command = _LEADING_POLITE.sub("", command).strip()
-<<<<<<< HEAD
-        command = _TRAILING_FILLER.sub("", command).strip()
-    return command
-
-
-=======
     return command
 
 
@@ -159,9 +139,6 @@ def _strip_trailing_filler(query: str) -> str:
     that captures free-form text (search terms, typed/dictated text),
     where the same word could be genuine content."""
     return _TRAILING_FILLER.sub("", query).strip()
-
-
->>>>>>> 45763e9 (Initial commit)
 _LOCATION_ANYWHERE_RE = re.compile(
     r",?\s*(?:on|in|to)\s+(?:the\s+)?(desktop|documents|downloads)\b\.?"
 )
@@ -201,8 +178,6 @@ def _split_create_target(remainder: str) -> tuple[str, str]:
     return name, location
 
 
-<<<<<<< HEAD
-=======
 # "Open X" for these means open the site, not search for an installed
 # app called X -- there's no real Windows app named "youtube" or
 # "netflix" to resolve against, so without this "open youtube" would
@@ -280,7 +255,6 @@ def fast_dispatch(command: str):
     return None
 
 
->>>>>>> 45763e9 (Initial commit)
 def parse(transcript: str) -> ParsedIntent:
 
     text = clean_text(transcript)
@@ -338,9 +312,7 @@ def parse(transcript: str) -> ParsedIntent:
             command,
         )
 
-    # ------------------------------------------------
-<<<<<<< HEAD
-=======
+        # ------------------------------------------------
     # FAST PATH -- cheap, plain string checks (no regex, no fuzzy
     # matching, no AI) for the handful of commands said constantly:
     # open an app/site, adjust volume, play music, shut down the PC.
@@ -355,7 +327,6 @@ def parse(transcript: str) -> ParsedIntent:
         return fast
 
     # ------------------------------------------------
->>>>>>> 45763e9 (Initial commit)
     # OPEN COMMAND
     # ------------------------------------------------
 
@@ -469,23 +440,10 @@ def parse(transcript: str) -> ParsedIntent:
 
     match = re.match(r"^(?:close|exit|quit|stop|shut ?down)\s+(?:the\s+)?(.+)$", command)
     if match:
-<<<<<<< HEAD
-        return ParsedIntent(IntentType.CLOSE_APP, match.group(1).strip())
-
-    # Bare "shut down" / "shutdown" with no app named and no "jarvis" --
-    # not the shutdown phrase (that's caught earlier in main.py) and not
-    # a close command either since nothing to close was named. Keep it as
-    # UNKNOWN but with a query is_shutdown_like() below can recognize, so
-    # the executor can give a helpful nudge instead of a flat "I didn't
-    # understand that."
-    if command in ("shut down", "shutdown"):
-        return ParsedIntent(IntentType.UNKNOWN, command)
-=======
         return ParsedIntent(IntentType.CLOSE_APP, _strip_trailing_filler(match.group(1).strip()))
 
     # Note: bare "shut down"/"shutdown" (no app named) is now handled by
     # fast_dispatch() above as SYSTEM_SHUTDOWN -- it never reaches here.
->>>>>>> 45763e9 (Initial commit)
 
     match = re.match(r"^save\s+(?:the\s+)?(?:file|document)?\s*(.*)$", command)
     if match and match.group(1).strip():
@@ -702,10 +660,7 @@ def parse(transcript: str) -> ParsedIntent:
             query = re.sub(
                 r"\s+(?:app|application|software|program|browser)$", "", query
             ).strip()
-<<<<<<< HEAD
-=======
             query = _strip_trailing_filler(query)
->>>>>>> 45763e9 (Initial commit)
 
             return ParsedIntent(
                 IntentType.LAUNCH_APP,
@@ -736,11 +691,7 @@ _COMMAND_VERBS = (
     r"go to|navigate to|show me|new tab|copy|paste|save|web search|"
     r"make|create|delete|rename|list|show|screenshot|volume|mute|unmute|"
     r"type|write|dictate|switch to|press|select all|undo|redo|"
-<<<<<<< HEAD
-    r"minimize|maximize"
-=======
     r"minimize|maximize|play|turn off|power off"
->>>>>>> 45763e9 (Initial commit)
 )
 _SPLIT_RE = re.compile(
     rf"\s*(?:,|;|\band then\b|\bthen\b|\band\b|\balso\b)\s*(?=(?:{_COMMAND_VERBS})\b)"

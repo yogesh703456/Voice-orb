@@ -24,11 +24,7 @@ import sys
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
-<<<<<<< HEAD
-from PySide6.QtCore import Qt, QTimer, QPointF
-=======
 from PySide6.QtCore import Qt, QTimer, QPointF ,QSettings
->>>>>>> 45763e9 (Initial commit)
 from PySide6.QtGui import QPainter, QColor, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -110,10 +106,7 @@ class OrbWidget(QWidget):
         self.audio_level = 0.0
         self.audio_target = 0.0
         self.drag_offset = None
-<<<<<<< HEAD
-=======
         self.settings = QSettings("VoiceOrb", "VoiceOrb")
->>>>>>> 45763e9 (Initial commit)
 
         screen = QApplication.primaryScreen().availableGeometry()
         # Honor any configured size_px (clamped to a sane minimum so the
@@ -128,16 +121,12 @@ class OrbWidget(QWidget):
         else:
             side = max(190, min(int(min(screen.width(), screen.height()) * .205), 360))
         self.resize(side, side)
-<<<<<<< HEAD
-        self._place(screen, side)
-=======
         saved_position = self.settings.value("orb_position")
 
         if saved_position is not None:
             self.move(saved_position)
         else:
             self._place(screen, side)
->>>>>>> 45763e9 (Initial commit)
 
         rng = random.Random(91)
         self.particles = []
@@ -152,13 +141,10 @@ class OrbWidget(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(16)
-<<<<<<< HEAD
-=======
     def closeEvent(self, event) -> None:
         self.settings.setValue("orb_position", self.pos())
         self.settings.sync()
         event.accept()    
->>>>>>> 45763e9 (Initial commit)
 
     def _place(self, screen, side: int) -> None:
         margin = max(24, int(side * .12))

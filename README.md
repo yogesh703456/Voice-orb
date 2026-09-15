@@ -63,14 +63,9 @@ voice-orb/
 ## Setup (once implementation lands)
 
 ```bash
-<<<<<<< HEAD
-python -m venv .venv
-.venv\Scripts\activate
-=======
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
->>>>>>> 45763e9 (Initial commit)
 pip install -r requirements.txt
 python main.py
 ```
@@ -80,9 +75,33 @@ python main.py
 Handled by a setup script (added in the tray/autostart milestone) that
 registers a Task Scheduler entry running `main.py` at logon, hidden.
 
-## Status
+## LLM brain (optional -- LOCAL by default)
 
-Framework/skeleton stage — folder structure and module stubs only. Build
-plan and milestones tracked in the project discussion; implementation
-follows the day-by-day plan (wake word -> STT -> file search -> intent
-parsing -> TTS -> orb widget -> autostart -> polish).
+JARVIS works fully without the LLM (regex intents + executor). The default
+brain is **local**: Ollama on this machine, no internet, no API key.
+
+Local setup (Ollama already installed and the model already pulled):
+
+1. Make sure the Ollama app is running (it listens on
+   `http://127.0.0.1:11434`).
+2. In `config/settings.yaml`: `llm.enabled: true`, `provider: "ollama"`.
+   Leave `model: ""` to auto-use the one installed model (if several are
+   installed, set its exact name, e.g. `qwen3.5:4b`).
+3. Optional knobs: `keep_alive_sec` (how long the model stays resident in
+   RAM; after it expires the next request reloads the model), `think`
+   (reasoning mode -- leave OFF for voice; it is far too slow on CPU),
+   `timeout_sec` (hard cap per request; CPU inference needs more than
+   cloud).
+
+Cloud providers still work if you ever want them: set `provider` to
+`anthropic` or `openai-compatible` and put the key in a git-ignored `.env`
+(`copy .env.example .env`). Keys are read from the environment only and
+are never stored in settings or source.
+
+The LLM is only consulted when the built-in intent parser cannot
+understand a command (everything else stays fast -- sub-10ms -- and free),
+and its answer must pass a strict validator before the executor runs
+anything. Dangerous intents keep their spoken confirmation flow. All
+requests have a hard timeout and fall back gracefully when the provider
+is unreachable -- with the local brain, that only happens if the Ollama
+app itself is not running.

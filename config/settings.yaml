@@ -32,3 +32,33 @@ file_index:
 startup:
   autostart: true
   run_hidden: true
+
+# Optional LLM brain. When disabled, JARVIS behaves exactly as before
+# (regex intents + executor only).
+#
+# provider: "ollama" (default -- LOCAL, no key, no internet) | "anthropic" |
+#           "openai-compatible"
+#
+# Ollama (local):
+#   model: "" auto-uses the ONE installed Ollama model; set it explicitly
+#          (e.g. qwen3.5:4b) if several are installed. Needs the Ollama app
+#          running (default endpoint http://127.0.0.1:11434).
+#   think: the model's reasoning mode -- thorough but far too slow for a
+#          voice assistant on CPU.
+#   keep_alive_sec: how long the model stays resident in RAM between
+#          requests (-1 = forever). After it expires, the next request
+#          pays a cold model load.
+#
+# Cloud providers need a key in the environment or a git-ignored .env
+# file (see .env.example). Keys are NEVER written in this file.
+llm:
+  enabled: true               # local Ollama brain is ON
+  provider: "ollama"          # ollama (local) | anthropic | openai-compatible
+  model: ""                   # empty = auto-use the single installed Ollama model
+  base_url: ""                # empty = http://127.0.0.1:11434 (Ollama default)
+  temperature: 0.0            # deterministic command parsing
+  timeout_sec: 30.0           # hard cap on one LLM request (CPU inference is slower than cloud)
+  max_tokens: 300             # decisions are tiny; no need for more
+  keep_alive_sec: 3600        # keep the model resident 1h between requests
+  think: false                # reasoning mode: OFF (too slow for voice on CPU)
+  # api_key_env: "OLLAMA_API_KEY"   # only needed for key-secured Ollama proxies

@@ -14,15 +14,12 @@ import webbrowser
 from typing import Callable, Optional
 from core.intent import ParsedIntent, IntentType
 from core import apps
-<<<<<<< HEAD
-=======
 from indexer.file_index import FileIndex
 
 try:
     from rapidfuzz import fuzz, process as fuzzy_process
 except ImportError:
     fuzzy_process = None
->>>>>>> 45763e9 (Initial commit)
 
 try:
     from send2trash import send2trash
@@ -175,9 +172,6 @@ _SKIP_DIR_NAMES = {
 }
 
 
-<<<<<<< HEAD
-def _search_user_files(query: str, limit: int = 5, max_files: int = 2500) -> list[Path]:
-=======
 def _fuzzy_pick(needle: str, candidates: list[tuple[Path, str]], limit: int) -> list[Path]:
     """Rescue pass for when no exact substring matched anything: fuzzy-
     match the needle against every candidate name collected during the
@@ -209,26 +203,17 @@ def _find_matches(query: str, *, mode: str, limit: int, max_items: int) -> list[
     _search_user_folders (mode="files" or "dirs"): exact substring
     matches first (fast, precise), then a fuzzy fallback over everything
     seen if that finds nothing at all."""
->>>>>>> 45763e9 (Initial commit)
     needle = query.strip().lower()
     # Below ~4 characters a raw substring match starts hitting unrelated
     # files purely by coincidence -- "you" is a substring of "layout.tsx",
     # "it" of "editor.py", etc. A garbled/short transcript should fail
-<<<<<<< HEAD
-    # cleanly rather than confidently open the wrong file.
-=======
     # cleanly rather than confidently open the wrong thing.
->>>>>>> 45763e9 (Initial commit)
     if not needle or len(needle) < 4:
         return []
 
     roots = [Path.home() / folder for folder in ("Desktop", "Documents", "Downloads")]
-<<<<<<< HEAD
-    matches: list[Path] = []
-=======
     substring_matches: list[Path] = []
     candidates: list[tuple[Path, str]] = []
->>>>>>> 45763e9 (Initial commit)
     scanned = 0
 
     for root in roots:
@@ -237,49 +222,6 @@ def _find_matches(query: str, *, mode: str, limit: int, max_items: int) -> list[
         try:
             for dirpath, dirnames, filenames in os.walk(root):
                 dirnames[:] = [name for name in dirnames if name not in _SKIP_DIR_NAMES]
-<<<<<<< HEAD
-                for name in filenames:
-                    scanned += 1
-                    if scanned > max_files:
-                        return matches
-                    if needle in name.lower():
-                        matches.append(Path(dirpath) / name)
-                        if len(matches) >= limit:
-                            return matches
-        except OSError:
-            continue
-    return matches
-
-
-def _search_user_folders(query: str, limit: int = 5, max_dirs: int = 2500) -> list[Path]:
-    """Same idea as _search_user_files but for directories, used by
-    delete/rename when the target turns out to be a folder, not a file."""
-    needle = query.strip().lower()
-    if not needle or len(needle) < 4:
-        return []
-
-    roots = [Path.home() / folder for folder in ("Desktop", "Documents", "Downloads")]
-    matches: list[Path] = []
-    scanned = 0
-
-    for root in roots:
-        if not root.exists():
-            continue
-        try:
-            for dirpath, dirnames, _filenames in os.walk(root):
-                dirnames[:] = [name for name in dirnames if name not in _SKIP_DIR_NAMES]
-                for name in list(dirnames):
-                    scanned += 1
-                    if scanned > max_dirs:
-                        return matches
-                    if needle in name.lower():
-                        matches.append(Path(dirpath) / name)
-                        if len(matches) >= limit:
-                            return matches
-        except OSError:
-            continue
-    return matches
-=======
                 names = list(dirnames) if mode == "dirs" else filenames
                 for name in names:
                     scanned += 1
@@ -332,7 +274,6 @@ def _search_user_folders(
             folders_only=True,
         )
     ]
->>>>>>> 45763e9 (Initial commit)
 
 
 _LOCATIONS = {
@@ -376,30 +317,6 @@ def _next_available_name(directory: Path, base: str, suffix: str = "") -> str:
 # just talked about, with no name repeated) has something concrete to
 # resolve to instead of failing outright.
 _LAST_CREATED_PATH: Optional[Path] = None
-<<<<<<< HEAD
-
-
-def _delete_path(path: Path, is_dir: bool) -> ExecutionResult:
-    """Actually remove path -- called only after the user has confirmed.
-    Prefers the Recycle Bin (send2trash) over a permanent delete so a
-    misheard confirmation doesn't mean something is gone for good."""
-    global _LAST_CREATED_PATH
-    try:
-        if send2trash is not None:
-            send2trash(str(path))
-            result = ExecutionResult(True, f"Moved {path.name} to the Recycle Bin.")
-        elif is_dir:
-            shutil.rmtree(path)
-            result = ExecutionResult(True, f"Permanently deleted {path.name}. (Install send2trash to use the Recycle Bin instead.)")
-        else:
-            path.unlink()
-            result = ExecutionResult(True, f"Permanently deleted {path.name}. (Install send2trash to use the Recycle Bin instead.)")
-        if _LAST_CREATED_PATH == path:
-            _LAST_CREATED_PATH = None
-        return result
-    except OSError as exc:
-        return ExecutionResult(False, f"I couldn't delete {path.name}: {exc}")
-=======
 _file_index: FileIndex | None = None
 
 
@@ -434,7 +351,6 @@ def _delete_path(path: Path, is_dir: bool) -> ExecutionResult:
             False,
             f"I couldn't move {path.name} to the Recycle Bin: {exc}"
         )
->>>>>>> 45763e9 (Initial commit)
 
 
 def _type_text(text: str) -> ExecutionResult:
@@ -533,8 +449,6 @@ def _control_window(action: str, target: str = "") -> ExecutionResult:
         return ExecutionResult(False, f"I couldn't do that: {exc}")
 
 
-<<<<<<< HEAD
-=======
 def _play_music(query: str) -> ExecutionResult:
     """"Play music" with no target -- open a local music app if one's
     installed, else fall back to YouTube Music. "Play <song/artist>" --
@@ -586,7 +500,6 @@ def _system_shutdown(command: str) -> ExecutionResult:
     )
 
 
->>>>>>> 45763e9 (Initial commit)
 def _control_volume(command: str) -> ExecutionResult:
     """Volume up/down/mute/unmute via simulated media keys -- works on any
     Windows machine with no extra dependency. Setting an exact percentage
@@ -648,8 +561,6 @@ def _control_volume(command: str) -> ExecutionResult:
         return ExecutionResult(False, f"I couldn't change the volume: {exc}")
 
 
-<<<<<<< HEAD
-=======
 def ai_fallback(command: str) -> Optional[str]:
     """Extension point for the "else: send_to_ai(command)" branch --
     called only when nothing else (fast_dispatch's cheap checks, then the
@@ -687,7 +598,6 @@ def warm_up() -> None:
             pass
 
 
->>>>>>> 45763e9 (Initial commit)
 def execute(intent: ParsedIntent) -> ExecutionResult:
 
     # ---------------------------------------------
@@ -923,15 +833,12 @@ def execute(intent: ParsedIntent) -> ExecutionResult:
     if intent.type == IntentType.VOLUME_CONTROL:
         return _control_volume(intent.query)
 
-<<<<<<< HEAD
-=======
     if intent.type == IntentType.PLAY_MUSIC:
         return _play_music(intent.query)
 
     if intent.type == IntentType.SYSTEM_SHUTDOWN:
         return _system_shutdown(intent.query)
 
->>>>>>> 45763e9 (Initial commit)
     if intent.type == IntentType.TYPE_TEXT:
         return _type_text(intent.query)
 
@@ -977,22 +884,9 @@ def execute(intent: ParsedIntent) -> ExecutionResult:
 
     if intent.type == IntentType.UNKNOWN:
 
-<<<<<<< HEAD
-        if intent.query.strip() in ("shut down", "shutdown"):
-            # Heard "shut down" but not "... jarvis" (which main.py's
-            # is_shutdown() checks for before we even get here) and no
-            # app was named either -- rather than a flat "I didn't
-            # understand", nudge toward the two things that were probably
-            # meant.
-            return ExecutionResult(
-                False,
-                "Say \"shutdown jarvis\" to exit, or tell me which app to close.",
-            )
-=======
         ai_response = ai_fallback(intent.query)
         if ai_response:
             return ExecutionResult(True, ai_response)
->>>>>>> 45763e9 (Initial commit)
 
         return ExecutionResult(
             False,
@@ -1054,10 +948,6 @@ def execute(intent: ParsedIntent) -> ExecutionResult:
                 if apps.launch_by_app_id(match["app_id"]):
                     return ExecutionResult(True, f"Opening {match['name']}.")
 
-<<<<<<< HEAD
-            # Nothing matched as an app -- it might be a file instead.
-            matches = _search_user_files(app, limit=1)
-=======
             # Nothing matched as an app -- it might be a file or folder
             # instead. Folders matter just as much as files here: "open
             # my project folder" is exactly as common a request as "open
@@ -1066,39 +956,35 @@ def execute(intent: ParsedIntent) -> ExecutionResult:
             # directory could never be opened this way no matter what was
             # said.
             matches = _search_user_files(app, limit=7)
->>>>>>> 45763e9 (Initial commit)
             if matches:
                 os.startfile(str(matches[0]))
                 return ExecutionResult(True, f"Opening {matches[0].name}.")
 
-<<<<<<< HEAD
-=======
             folder_matches = _search_user_folders(app, limit=5)
 
             exact_folder = next(
-             (
-                 folder for folder in folder_matches
-                 if app == folder.name.lower()
-                 or app in folder.name.lower()
-             ),
-             None,
-        )
-
-        if exact_folder:
-            os.startfile(str(exact_folder))
-            return ExecutionResult(
-                True,
-                f"Opening the {exact_folder.name} folder."
+                (
+                    folder for folder in folder_matches
+                    if app == folder.name.lower()
+                    or app in folder.name.lower()
+                ),
+                None,
             )
 
-        if folder_matches:
-            choices = ", ".join(folder.name for folder in folder_matches)
-            return ExecutionResult(
-                False,
-                f"I found possible folders: {choices}. Please say the full folder name."
-            )
+            if exact_folder:
+                os.startfile(str(exact_folder))
+                return ExecutionResult(
+                    True,
+                    f"Opening the {exact_folder.name} folder."
+                )
 
->>>>>>> 45763e9 (Initial commit)
+            if folder_matches:
+                choices = ", ".join(folder.name for folder in folder_matches)
+                return ExecutionResult(
+                    False,
+                    f"I found possible folders: {choices}. Please say the full folder name."
+                )
+
         return ExecutionResult(
             False,
             f"I couldn't find an app or file called {intent.query}."
@@ -1201,17 +1087,6 @@ def execute_all(intents: list[ParsedIntent]) -> ExecutionResult:
     responses: list[str] = []
     overall_success = False
     for intent in intents:
-<<<<<<< HEAD
-        if intent.type == IntentType.DELETE_ITEM:
-            # Deletion needs a spoken yes/no confirmation, which only
-            # main.py's single-command path knows how to do -- silently
-            # running (or silently skipping) a delete buried inside a
-            # multi-command batch would be exactly the kind of surprising
-            # destructive action this project should never produce.
-            responses.append(
-                f'For safety, deletions need to be their own command -- '
-                f'say "delete {intent.query}" by itself'
-=======
         if intent.type in (IntentType.DELETE_ITEM, IntentType.SYSTEM_SHUTDOWN):
             # Both need a spoken yes/no confirmation, which only main.py's
             # single-command path knows how to do -- silently running (or
@@ -1225,7 +1100,6 @@ def execute_all(intents: list[ParsedIntent]) -> ExecutionResult:
             responses.append(
                 f'For safety, {label.lower()} need to be their own command -- '
                 f'say "{example}" by itself'
->>>>>>> 45763e9 (Initial commit)
             )
             continue
         result = execute(intent)

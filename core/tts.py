@@ -130,11 +130,7 @@ class Speaker:
                 print("[TTS] pyttsx3 timed out; using PowerShell fallback.")
 
             self._consecutive_failures += 1
-<<<<<<< HEAD
             if self._consecutive_failures >= 2:
-=======
-            if self._consecutive_failures >= 1:
->>>>>>> 45763e9 (Initial commit)
                 # pyttsx3/SAPI5 is a known source of this exact failure
                 # mode -- works once or twice, then silently stops
                 # producing audio for the rest of the session. Once it's

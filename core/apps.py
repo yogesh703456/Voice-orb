@@ -54,15 +54,12 @@ _VAGUE_TARGETS = {
     "it", "that", "this", "them", "one", "thing", "app", "program", "software",
     "you", "your", "yourself", "me", "myself", "him", "her", "someone",
     "something", "anything", "anyone",
-<<<<<<< HEAD
-=======
     # Generic enough that a substring match against real running processes
     # is a coin flip on WHICH background process gets hit (many Windows
     # services/apps have "service"/"process"/"task" somewhere in their
     # process name) -- "close the service" should ask which one, not
     # gamble on force-closing whatever matched first.
     "service", "services", "process", "processes", "task", "tasks",
->>>>>>> 45763e9 (Initial commit)
 }
 
 
@@ -117,15 +114,6 @@ def _load_start_apps() -> list[dict]:
 
 
 def preload() -> None:
-<<<<<<< HEAD
-    """Kick off the Start Menu scan early (call this once, right after
-    the pipeline starts) so the first 'open <app>' of the session isn't
-    the one paying for the PowerShell round-trip."""
-    threading.Thread(target=_load_start_apps, daemon=True).start()
-
-
-def resolve_app(spoken_name: str, score_cutoff: float = 85.0) -> Optional[dict]:
-=======
     """Scan the Start Menu now, at startup -- blocking, deliberately --
     so it's fully cached before the wait loop begins rather than racing
     a background thread against the first "open <app>" of the session.
@@ -137,7 +125,6 @@ def resolve_app(spoken_name: str, score_cutoff: float = 85.0) -> Optional[dict]:
 
 
 def resolve_app(spoken_name: str, score_cutoff: float = 90.0) -> Optional[dict]:
->>>>>>> 45763e9 (Initial commit)
     """Fuzzy-match a spoken app name against every installed Start Menu
     entry (Win32 + UWP alike). Returns {'name', 'app_id'} for the best
     match, or None if nothing crosses the confidence cutoff -- callers
@@ -170,7 +157,6 @@ def resolve_app(spoken_name: str, score_cutoff: float = 90.0) -> Optional[dict]:
     # specifically to rescue names mangled by imperfect STT ("fotos" for
     # "Photos", "kalkulator" for "Calculator") that the strict cutoff
     # would otherwise reject outright.
-<<<<<<< HEAD
     for cutoff in (score_cutoff, max(60.0, score_cutoff - 20)):
         match = fuzzy_process.extractOne(
             needle, names, scorer=fuzz.WRatio, score_cutoff=cutoff
@@ -179,20 +165,6 @@ def resolve_app(spoken_name: str, score_cutoff: float = 90.0) -> Optional[dict]:
             _matched_name, _score, index = match
             return apps[index]
     return None
-=======
-    match = fuzzy_process.extractOne(
-    needle,
-    names,
-    scorer=fuzz.WRatio,
-    score_cutoff=score_cutoff,
-    )
-
-    if not match:
-        return None
-
-    _matched_name, _score, index = match
-    return apps[index]
->>>>>>> 45763e9 (Initial commit)
 
 
 def launch_by_app_id(app_id: str) -> bool:

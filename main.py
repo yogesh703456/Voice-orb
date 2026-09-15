@@ -6,11 +6,16 @@ from pathlib import Path
 
 from core.capture import record_command
 from core.speech_recognition import SpeechRecognizer
-from core.intent import parse_commands
+from core.intent import IntentType, ParsedIntent, parse_commands
 from core.executor import execute_all, warm_up
 from core.tts import Speaker
 from core.wake_word import WakeWordListener
 from core import apps
+from core import llm_service
+from core.llm_brain import LLMParseError
+from core.llm_provider import LLMError
+from core.llm_service import LLMService
+from core.llm_validator import LLMValidationError, validate_decision
 from orb.state import OrbState, state_bus
 from indexer.file_index import FileIndex
 from core.executor import configure_file_index
@@ -80,6 +85,114 @@ _AFFIRMATIVE = {
     "yes", "yeah", "yep", "yup", "sure", "confirm", "confirmed",
     "do it", "go ahead", "affirmative", "correct", "please do",
 }
+
+
+# ---------------------------------------------------------------------------
+# LLM BRAIN (optional) -- consultation logic
+# ---------------------------------------------------------------------------
+# Engaged ONLY when the regex parser produced a single UNKNOWN intent, so
+# known commands keep their zero-cost fast path (rule 9). The LLM never
+# executes anything: its decision is parsed (llm_brain), validated
+# (llm_validator), and only then handed to the same executor the regex
+# path uses. Every failure mode degrades to a spoken fallback -- never a
+# crash, never an infinite wait.
+
+# Spoken when the brain (local Ollama or cloud) can't be reached, per
+# failure kind. Honest and short; never exposes error details or key
+# material.
+_LLM_FALLBACK_RESPONSES = {
+    "timeout": "My brain is too slow to respond right now.",
+    "network": "I can't reach my brain right now, so I'm running on local commands only.",
+    "auth": "My brain service rejected its credentials, so requests are unavailable.",
+    "rate_limit": "My brain is overloaded right now. Try again in a moment.",
+    "provider": "My brain service is having problems right now.",
+    "response": "My brain gave me a garbled answer, so I'll skip that.",
+    "not_configured": "My brain isn't configured.",
+    "error": "My brain failed just now.",
+}
+_LLM_GENERAL_FALLBACK = "My brain failed just now."
+_LLM_REJECTED_RESPONSE = "I thought about that, but I can't do it safely."
+_LLM_UNPARSEABLE_RESPONSE = "I couldn't quite work out how to do that."
+
+
+class _LLMOutcome:
+    """Result of one LLM consultation: either a direct spoken response
+    (chat / graceful fallback) or a validated intent ready for the
+    executor. Never both."""
+
+    __slots__ = ("chat_response", "validated_intent")
+
+    def __init__(self, chat_response: str = "", validated_intent: ParsedIntent | None = None) -> None:
+        self.chat_response = chat_response
+        self.validated_intent = validated_intent
+
+
+def _clamp_for_speech(text: str, max_chars: int = 600) -> str:
+    """Keep TTS output bounded and sentence-clean: never speak a truncated
+    mid-sentence blob, never speak an empty response."""
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    cutoff = text.rfind(". ", 0, max_chars)
+    if cutoff < max_chars // 2:
+        cutoff = max_chars
+        text = text[:cutoff].rstrip()
+        # Trim a trailing partial word.
+        if " " in text:
+            text = text.rsplit(" ", 1)[0]
+        return text + "..."
+    return text[: cutoff + 1]
+
+
+def _consult_llm(transcript: str, llm: LLMService) -> _LLMOutcome | None:
+    """Ask the LLM what to do with a transcript the parser couldn't read.
+
+    Returns None when the LLM said "unknown" (the executor's normal
+    I-didn't-understand response should run) or when nothing usable came
+    back; otherwise an _LLMOutcome. Never raises.
+    """
+    started = time.perf_counter()
+    try:
+        decision = llm.decide(transcript)
+    except LLMError as exc:
+        latency = time.perf_counter() - started
+        print(f"[LLM] unavailable after {latency:.1f}s (kind={exc.kind}); using fallback response.")
+        return _LLMOutcome(chat_response=_LLM_FALLBACK_RESPONSES.get(exc.kind, _LLM_GENERAL_FALLBACK))
+    except LLMParseError as exc:
+        latency = time.perf_counter() - started
+        print(f"[LLM] malformed decision after {latency:.1f}s: {exc}")
+        return _LLMOutcome(chat_response=_LLM_UNPARSEABLE_RESPONSE)
+    except Exception as exc:  # never let the optional brain crash the loop
+        latency = time.perf_counter() - started
+        print(f"[LLM] unexpected error after {latency:.1f}s: {type(exc).__name__}: {exc}")
+        return _LLMOutcome(chat_response=_LLM_GENERAL_FALLBACK)
+
+    latency = llm.last_latency_sec or (time.perf_counter() - started)
+    print(f"[LLM] decision action={decision.action} intent={decision.intent!r} ({latency:.1f}s)")
+
+    if decision.action == "chat":
+        response = _clamp_for_speech(decision.response or "I'm not sure what to say to that.")
+        return _LLMOutcome(chat_response=response)
+
+    if decision.action != "command":
+        # "unknown": no LLM action -- fall through to the executor's
+        # standard response so behavior matches the non-LLM app.
+        return None
+
+    try:
+        intent = validate_decision(decision)
+    except LLMValidationError as exc:
+        print(f"[LLM] validator rejected the command: {exc}")
+        return _LLMOutcome(chat_response=_LLM_REJECTED_RESPONSE)
+
+    if intent is None:
+        return None
+    print(f"[LLM] validated -> {intent}")
+    return _LLMOutcome(validated_intent=intent)
+
+
+def _fmt_ms(seconds: float) -> str:
+    return f"{seconds * 1000:.0f}ms"
 
 
 def is_affirmative(text: str) -> bool:
@@ -172,6 +285,14 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
         wake_listener = None
 
     warm_up()
+
+    # LLM brain (optional): built ONCE here -- config load + provider
+    # construction -- so no command ever pays initialization cost. When
+    # disabled or unconfigured this prints the reason and changes nothing
+    # else about the pipeline.
+    llm = llm_service.get_service(settings)
+    print(f"[LLM] {llm.describe()}")
+
     if file_index_cfg.get("watch_for_changes", True):
         index_watcher = IndexWatcher(file_index, index_roots)
         index_watcher.start()
@@ -224,7 +345,10 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
                 continue
 
             state_bus.set_state(OrbState.THINKING)
+            _turn_started = time.perf_counter()
+            _stt_started = time.perf_counter()
             text = recognizer.transcribe(audio)
+            _stt_latency = time.perf_counter() - _stt_started
             if not text:
                 print("[JARVIS] I didn't hear anything.")
                 state_bus.set_state(OrbState.RESPONDING)
@@ -258,8 +382,46 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
             for i, intent in enumerate(intents, 1):
                 print(f"[INTENT {i}/{len(intents)}] {intent}")
 
+            # LLM brain (optional): consulted ONLY when the parser produced
+            # exactly one UNKNOWN intent, so every recognized command keeps
+            # its zero-cost fast path. The LLM's decision is validated
+            # before it can reach the executor (see _consult_llm).
+            llm_chat_response = ""
+            _llm_latency = None
+            if (llm.available
+                    and len(intents) == 1
+                    and intents[0].type is IntentType.UNKNOWN):
+                state_bus.set_state(OrbState.THINKING)
+                outcome = _consult_llm(text, llm)
+                if outcome is not None:
+                    if outcome.validated_intent is not None:
+                        intents = [outcome.validated_intent]
+                    else:
+                        llm_chat_response = outcome.chat_response
+                    _llm_latency = llm.last_latency_sec
+
+            _executor_started = time.perf_counter()
+            if llm_chat_response:
+                _executor_latency = time.perf_counter() - _executor_started
+                print(
+                    f"[TIMING] stt={_fmt_ms(_stt_latency)} "
+                    f"llm={_fmt_ms(_llm_latency or 0.0)} "
+                    f"executor={_fmt_ms(_executor_latency)} "
+                    f"total={_fmt_ms(time.perf_counter() - _turn_started)}"
+                )
+                state_bus.set_state(OrbState.RESPONDING)
+                speaker.say(llm_chat_response)
+                time.sleep(0.3)
+                continue
+
             state_bus.set_state(OrbState.EXECUTING)
             result = execute_all(intents)
+            _executor_latency = time.perf_counter() - _executor_started
+            print(
+                f"[TIMING] stt={_fmt_ms(_stt_latency)} "
+                f"llm={_fmt_ms(_llm_latency or 0.0)} "
+                f"executor={_fmt_ms(_executor_latency)}"
+            )
             print()
             print("=" * 60)
             print("JARVIS")
@@ -269,6 +431,7 @@ def run_pipeline(settings: dict, stop_event: threading.Event, on_shutdown) -> No
 
             state_bus.set_state(OrbState.RESPONDING)
             speaker.say(result.spoken_response)
+            print(f"[TIMING] total={_fmt_ms(time.perf_counter() - _turn_started)}")
 
             if result.needs_confirmation and result.pending_action is not None:
                 # A destructive action (currently just delete) asked a
